@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name            = "titans-memory"
+version         = "0.1.0"
+description     = "PyTorch implementation of Titans: Learning to Memorize at Test Time (Behrouz, Zhong & Mirrokni, 2024)"
+readme          = "README.md"
+license         = { text = "MIT" }
+requires-python = ">=3.9"
+keywords        = ["deep-learning", "transformers", "long-context", "memory", "titans", "neural-memory"]
+
+authors = [
+  { name = "Neuranox" },
+  { name = "Implementation of arXiv:2501.00663" },
+]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+  "torch>=2.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "pytest-cov",
+]
+train = [
+  "datasets>=2.16",
+  "transformers>=4.38",
+  "tqdm",
+  "tensorboard",
+]
+all = [
+  "datasets>=2.16",
+  "transformers>=4.38",
+  "tqdm",
+  "tensorboard",
+  "pytest>=7.0",
+  "pytest-cov",
+]
+
+[project.urls]
+"Homepage"    = "https://github.com/Neuranox/titans-memory"
+"Bug Tracker" = "https://github.com/Neuranox/titans-memory/issues"
+"Paper"       = "https://arxiv.org/abs/2501.00663"
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["titans*"]
+
+[tool.pytest.ini_options]
+testpaths    = ["tests"]
+addopts      = "-v --tb=short"
