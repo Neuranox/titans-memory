@@ -126,37 +126,6 @@ See `examples/02_training_loop.py` for a complete runnable example.
 
 ---
 
-## Architecture Overview
-
-<p align="center">
-  <img src="assets/image1.png" alt="Titans Detail" width="80%">
-</p>
-
-```
-Titans (MAC) — Memory as a Context
-───────────────────────────────────────────────────────────
- For each segment S^(t):
-   h_t     = M*_{t-1}(q_t)           ← retrieve long-term memory
-   S̃^(t)  = [P || h_t || S^(t)]     ← augment with persistent + history
-   y_t     = Attention(S̃^(t))        ← full causal attention over window
-   M_t     = M_{t-1}.update(y_t)    ← write: gradient descent w/ momentum
-   o_t     = y_t ⊗ M*_t(y_t)        ← gated output
-
-Titans (MAG) — Memory as a Gate
-───────────────────────────────────────────────────────────
-   x̃  = [P || x]
-   y   = SW-Attn(x̃)  ← precise short-term memory (sliding window)
-   o   = y ⊗ M(x̃)   ← gated with neural long-term memory
-
-Titans (MAL) — Memory as a Layer
-───────────────────────────────────────────────────────────
-   x̃  = [P || x]
-   y   = M(x̃)         ← memory compresses context
-   o   = SW-Attn(y)   ← attention refines compressed representation
-```
-
----
-
 ## Neural Memory — Key Equations
 
 | Component | Equation | Description |
