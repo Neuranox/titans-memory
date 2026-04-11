@@ -140,7 +140,7 @@ See `examples/02_training_loop.py` for a complete runnable example.
 ## Running Tests
 
 ```bash
-cd "F:\Titan Model"
+cd "Titan Model"
 pip install -e .[dev]
 pytest
 ```
