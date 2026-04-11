@@ -12,6 +12,10 @@ A clean, highly-optimized PyTorch implementation of the **Titans** architecture 
 > Ali Behrouz, Peilin Zhong, Vahab Mirrokni — Google Research, 2024  
 > [arXiv:2501.00663](https://arxiv.org/abs/2501.00663)
 
+<p align="center">
+  <img src="assets/image.png" alt="Titans Architecture Overview" width="80%">
+</p>
+
 ---
 
 ## What's Inside
@@ -30,10 +34,10 @@ A clean, highly-optimized PyTorch implementation of the **Titans** architecture 
 ## Installation
 
 ```bash
-# Install directly from GitHub
-pip install git+https://github.com/Neuranox/titans-memory.git
+# Install via PyPI (Recommended)
+pip install titans-memory
 
-# Or clone and install locally (editable — recommended for development)
+# Or clone and install locally for development
 git clone https://github.com/Neuranox/titans-memory.git
 cd titans-memory
 pip install -e .
@@ -123,6 +127,10 @@ See `examples/02_training_loop.py` for a complete runnable example.
 ---
 
 ## Architecture Overview
+
+<p align="center">
+  <img src="assets/image1.png" alt="Titans Detail" width="80%">
+</p>
 
 ```
 Titans (MAC) — Memory as a Context
