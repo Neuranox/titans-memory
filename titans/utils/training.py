@@ -75,3 +75,23 @@ def build_optimizer(
         {"params": no_decay, "weight_decay": 0.0},
     ]
     return AdamW(groups, lr=lr, betas=(beta1, beta2))
+
+
+def setup_ddp():
+    """Initialize Distributed Data Parallel environment."""
+    import os
+    if "RANK" in os.environ:
+        torch.distributed.init_process_group(backend="nccl")
+        local_rank = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(local_rank)
+        return local_rank
+    return None
+
+
+def wrap_ddp(model, local_rank):
+    """Wrap model with DDP."""
+    if local_rank is not None:
+        from torch.nn.parallel import DistributedDataParallel as DDP
+        return DDP(model.cuda(), device_ids=[local_rank])
+    return model
+

@@ -1,195 +1,124 @@
-# Titans: Learning to Memorize at Test Time
+# 🪐 Titans: Learning to Memorize at Test Time
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/pytorch-2.1%2B-orange)](https://pytorch.org)
-[![GitHub release](https://img.shields.io/github/v/release/Neuranox/titans-memory)](https://github.com/Neuranox/titans-memory)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![arXiv](https://img.shields.io/badge/arXiv-2501.00663-red)](https://arxiv.org/abs/2501.00663)
 
-A clean, highly-optimized PyTorch implementation of the **Titans** architecture from:
-
-> **Titans: Learning to Memorize at Test Time**  
-> Ali Behrouz, Peilin Zhong, Vahab Mirrokni — Google Research, 2024  
-> [arXiv:2501.00663](https://arxiv.org/abs/2501.00663)
-
-<p align="center">
-  <img src="assets/image.png" alt="Titans Architecture Overview" width="80%">
-</p>
+An advanced, high-performance PyTorch implementation of the **Titans** architecture (Google Research, Jan 2025). This repo provides the tools to build models with **Infinite Context** using Neural Long-Term Memory.
 
 ---
 
-## What's Inside
-
-| Module | Description |
-|---|---|
-| `NeuralMemory` | Deep MLP that learns to memorize via gradient descent with **momentum** + **weight-decay forgetting** (§3) |
-| `PersistentMemory` | Learnable task-knowledge tokens prepended to every sequence (§3.3) |
-| `TitansMAC` | **Memory as a Context** — retrieves long-term memory as prefix to attention window (§4.1) |
-| `TitansMAG` | **Memory as a Gate** — SWA ⊗ NeuralMemory gated branch (§4.2) |
-| `TitansMAL` | **Memory as a Layer** — sequential LMM → SWA stack (§4.3) |
-| `TitansLMM` | **Standalone LMM** — neural memory without attention (§4.3) |
+## 📖 Table of Contents
+1. [Core Concept](#core-concept)
+2. [Mathematical Foundation](#mathematical-foundation)
+3. [Architecture Comparison](#architecture-comparison)
+4. [Variants Detailed](#variants-detailed)
+5. [Advanced Configuration](#advanced-configuration)
+6. [Performance & Parallel Scan](#performance--parallel-scan)
+7. [Project Structure](#project-structure)
 
 ---
 
-## Installation
+## 🔍 Core Concept
 
-```bash
-# Install via PyPI (Recommended)
-pip install titans-memory
+Traditional Transformers use a fixed-size **Short-Term Memory** (Attention). As the sequence grows, the cost becomes quadratic ($O(T^2)$), and ancient information is eventually truncated. 
 
-# Or clone and install locally for development
-git clone https://github.com/Neuranox/titans-memory.git
-cd titans-memory
-pip install -e .
-```
+**Titans** solve this by adding a **Neural Memory branch**. This branch is a deep MLP that acts as an associative store. For every new token, the model:
+1.  **Reads** from memory to get context.
+2.  **Computes** the "surprise" (loss) of the new token.
+3.  **Updates** its own weights via one step of gradient descent to "learn" the token.
 
 ---
 
-## Quick Start
+## 🧮 Mathematical Foundation
+
+The Neural Memory update follows these core equations from the paper:
+
+### 1. Surprise Update (Momentum)
+$$S_t = \eta_t S_{t-1} + \theta_t \nabla \ell(M_{t-1}; x_t)$$
+Where $\nabla \ell$ is the gradient of the MSE loss between memory prediction and the actual value. $\eta$ is the surprise momentum.
+
+### 2. Forgetting Gate (Weight Decay)
+$$M_t = (1 - \alpha_t) M_{t-1} + S_t$$
+The memory weights $M$ are updated using a combination of forgetting (weight decay) and the new surprise $S_t$.
+
+---
+
+## 📊 Architecture Comparison
+
+| Feature | Transformers | RNN / LSTM | Mamba / SSM | **Titans (Ours)** |
+|---|---|---|---|---|
+| **Context Length** | Fixed (Linear/Quad) | Infinite (but lossy) | Infinite | **Infinite (High Fidelity)** |
+| **Logic** | Matching | Compression | Linear Dynamics | **Test-Time Learning** |
+| **Scaling** | $O(T^2)$ | $O(T)$ | $O(T)$ | **$O(T)$ (or $O(\log T)$)** |
+| **Stability** | Very High | Low | High | **Very High** |
+
+---
+
+## 🧱 Variants Detailed
+
+### **MAC (Memory as a Context)**
+The gold standard for long-context RAG-style tasks.
+- **Workflow:** `Retrieve Memory` -> `Prepend to Attention` -> `Full Attention`.
+- **Best for:** Coding assistants, legal document analysis.
+
+### **MAG (Memory as a Gate)**
+- **Workflow:** Attention and Memory branches run in parallel; their outputs are gated via a SiLU-based mechanism.
+- **Best for:** Creative writing and reasoning where short-term and long-term context must blend.
+
+### **MAL (Memory as a Layer)**
+- **Workflow:** A sequence is passed through Neural Memory, followed by a Sliding Window Attention layer.
+- **Best for:** General-purpose LLMs seeking a balance between speed and precision.
+
+---
+
+## ⚙️ Advanced Configuration
+
+Our `TitansConfig` allows for granular control over the memory dynamics:
 
 ```python
-import torch
-from titans import TitansMAC, TitansMAG, TitansMAL, TitansLMM
-from titans.utils import TitansConfig, build_model, count_parameters
+from titans.utils import TitansConfig
 
-# ── Build from config ──────────────────────────────────────────────────
-cfg   = TitansConfig.small(variant="MAC")   # ~170 M params
-cfg.vocab_size = 32_000
-model = build_model(cfg)
-print(f"Parameters: {count_parameters(model):,}")
-
-# ── Forward pass ───────────────────────────────────────────────────────
-input_ids = torch.randint(0, 32_000, (2, 512))
-labels    = input_ids.clone()
-
-out = model(input_ids, labels=labels)
-print(out["logits"].shape)   # (2, 512, 32000)
-print(out["loss"].item())
-
-# ── Generation ─────────────────────────────────────────────────────────
-prompt    = torch.randint(0, 32_000, (1, 8))
-generated = model.generate(prompt, max_new_tokens=50, top_k=50)
+cfg = TitansConfig(
+    variant="MAC",
+    d_model=512,
+    n_layers=12,
+    mem_layers=2,        # Depth of the internal Neural Memory MLP
+    n_persistent=16,     # Constant tokens that stay in memory
+    chunk_size=64,       # Parallelization chunk size (Inner-loop)
+    use_momentum=True,   # Enable η surprise flow
+    use_decay=True       # Enable α forgetting gate
+)
 ```
 
 ---
 
-## All Four Variants
+## ⚡ Performance & Parallel Scan
 
-```python
-VOCAB = 32_000
-D     = 512
+In version 0.3.0, we implemented a **Binary Tree Associative Scan**. 
 
-models = {
-    "LMM": TitansLMM(VOCAB, d_model=D, n_layers=12, mem_layers=2),
-    "MAC": TitansMAC(VOCAB, d_model=D, n_layers=12, mem_layers=2, chunk_size=128),
-    "MAG": TitansMAG(VOCAB, d_model=D, n_layers=12, mem_layers=2, window=512),
-    "MAL": TitansMAL(VOCAB, d_model=D, n_layers=12, mem_layers=2, window=512),
-}
-```
+**Why it matters:** Standard RNN-like updates must run token-by-token (one after another). Our associative scan allows the GPU to process entire chunks of a sequence at once by using the associative property of the linear recurrence, reducing latency from $O(T)$ to $O(\log T)$.
 
 ---
 
-## TitansConfig — Paper-Scale Presets
+## 📂 Project Structure
 
-```python
-from titans.utils import TitansConfig, build_model
-
-cfg = TitansConfig.tiny(variant="MAC")    # ~30 M  — quick experiments
-cfg = TitansConfig.small(variant="MAC")   # ~170 M — paper Table 1
-cfg = TitansConfig.medium(variant="MAC")  # ~340 M — paper Table 1
-cfg = TitansConfig.large(variant="MAC")   # ~760 M — paper Table 1
-
-# JSON save / load
-cfg.to_json("config.json")
-cfg = TitansConfig.from_json("config.json")
-```
-
----
-
-## Training
-
-```python
-from titans.utils.training import build_optimizer, get_cosine_schedule_with_warmup
-
-optim = build_optimizer(model, lr=4e-4, weight_decay=0.1)          # AdamW, no wd on bias/norm
-sched = get_cosine_schedule_with_warmup(optim,
-            warmup_steps=2000, total_steps=100_000, min_lr_ratio=0.1)
-
-for batch in dataloader:
-    out  = model(batch["input_ids"], labels=batch["labels"])
-    out["loss"].backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-    optim.step(); sched.step(); optim.zero_grad()
-```
-
-See `examples/02_training_loop.py` for a complete runnable example.
-
----
-
-## Neural Memory — Key Equations
-
-| Component | Equation | Description |
-|---|---|---|
-| Momentary surprise | `∇ℓ(M_{t-1}; x_t)` | How unexpected is `x_t`? |
-| Surprise with momentum | `S_t = η_t S_{t-1} − θ_t ∇ℓ` | Eq. 10 — carries information flow |
-| Forgetting gate | `M_t = (1−α_t) M_{t-1} + S_t` | Eq. 13 — weight-decay style |
-| Retrieval | `y_t = M*(q_t)` | Eq. 15 — inference, no update |
-
----
-
-## Running Tests
-
-```bash
-cd "Titan Model"
-pip install -e .[dev]
-pytest
-```
-
----
-
-## Project Structure
-
-```
-Titan Model/
+```text
+titans-memory/
 ├── titans/
-│   ├── __init__.py           ← public API
-│   ├── memory/
-│   │   ├── neural_memory.py  ← NeuralMemory (LMM core)
-│   │   └── persistent_memory.py
-│   ├── models/
-│   │   ├── lmm.py            ← TitansLMM
-│   │   ├── mac.py            ← TitansMAC
-│   │   ├── mag.py            ← TitansMAG
-│   │   └── mal.py            ← TitansMAL
-│   ├── ops/
-│   │   ├── scan.py           ← parallel associative scan
-│   │   └── attention.py      ← causal + sliding-window attention
+│   ├── memory/           # Neural & Persistent Memory cores
+│   ├── models/           # MAC, MAG, MAL, LMM variants
+│   ├── ops/              # Parallel Associative Scan & Attention
 │   └── utils/
-│       ├── config.py         ← TitansConfig dataclass
-│       ├── factory.py        ← build_model()
-│       └── training.py       ← optimizer + LR schedule helpers
-├── tests/
-│   ├── test_scan.py
-│   ├── test_memory.py
-│   └── test_models.py
-├── examples/
-│   ├── 01_quickstart.py
-│   ├── 02_training_loop.py
-│   └── 03_memory_standalone.py
-├── pyproject.toml
-├── setup.py
+│       ├── hf.py         # HuggingFace Transformers wrapper
+│       ├── training.py   # DDP & Optimizer helpers
+│       └── config.py     # Unified TitansConfig
+├── tests/                # Full test suite (51+ tests)
+├── scripts/              # Weight conversion & local scripts
+├── examples/             # Quickstart & Training demos
+├── pyproject.toml        # Build system & Dependencies
 └── README.md
 ```
 
 ---
-
-## Citation
-
-```bibtex
-@article{behrouz2024titans,
-  title   = {Titans: Learning to Memorize at Test Time},
-  author  = {Behrouz, Ali and Zhong, Peilin and Mirrokni, Vahab},
-  journal = {arXiv preprint arXiv:2501.00663},
-  year    = {2024}
-}
-```
+<p align="center">Developed with precision by the <b>Neuranox</b> team.</p>
